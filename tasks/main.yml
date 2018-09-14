@@ -1,0 +1,120 @@
+---
+  - name: Suspend 1st node
+    panos_op:
+      cmd: 'request high-availability state suspend'
+      ip_address: '{{ panos_1st_fw }}'
+      api_key: '{{panos_api_key}}'
+    delegate_to: localhost
+
+  - name: Check for new Software
+    panos_op:
+      cmd: 'request system software check'
+      ip_address: '{{ panos_1st_fw }}'
+      api_key: '{{panos_api_key}}'
+    delegate_to: localhost
+
+  - name: Download new software
+    panos_op:
+      cmd: 'request system software download version {{panos_sw_ver}}'
+      ip_address: '{{ panos_1st_fw }}'
+      api_key: '{{panos_api_key}}'
+    delegate_to: localhost
+
+  - name: Install new software
+    panos_op:
+      cmd: 'request system software install version {{panos_sw_ver}}'
+      ip_address: '{{ panos_1st_fw }}'
+      api_key: '{{panos_api_key}}'
+    delegate_to: localhost
+
+  - name: Restart 1st node
+    panos_restart:
+      ip_address: '{{panos_1st_fw}}'
+      username: '{{panos_admin_user}}'
+      password: '{{panos_admin_pass}}'
+    delegate_to: localhost
+  
+  - name: Get the OS version from the API
+    get_url:
+      url: 'https://{{ panos_1st_fw }}/api/?type=version&key={{ panos_api_key }}'
+      dest: ./panos_version1.xml
+    retries: 30
+    delay: 5
+    register: result
+    until: result.status == 200
+    changed_when: false 	
+
+  - name: Check OS Version
+    xml:
+      file: ./panos_version1.xml
+      xpath: /response/result/sw-version
+      content: text
+    register: xmlresp
+    delegate_to: localhost
+
+  - debug:
+      msg: "xmlresp['matches'][0]['sw-version'] == 8.2.3"
+
+  - assert:
+      that:
+        - "xmlresp['matches'][0]['sw-version'] == 8.1.2"
+      msg: "The upgrade was not sucessfull on the 1st node. Restart the upgrade process..."
+
+  - name: Unsuspend 1st node
+    panos_op:
+      ip_address: '{{ panos_1st_fw }}'
+      username: '{{ panos_admin_user }}'
+      password: '{{ panos_admin_pass }}'
+      cmd: 'request high-availability state active'
+    delegate_to: localhost
+
+  - name: Check for new Software
+    panos_op:
+      cmd: 'request system software check'
+      ip_address: '{{ panos_2nd_fw }}'
+      api_key: '{{panos_api_key}}'
+    delegate_to: localhost
+
+  - name: Download new software
+    panos_op:
+      cmd: 'request system software download version {{panos_sw_ver}}'
+      ip_address: '{{ panos_2nd_fw }}'
+      api_key: '{{panos_api_key}}'
+    delegate_to: localhost
+
+  - name: Install new software
+    panos_op:
+      cmd: 'request system software install version {{panos_sw_ver}}'
+      ip_address: '{{ panos_2nd_fw }}'
+      api_key: '{{panos_api_key}}'
+    delegate_to: localhost
+
+  - name: Restart 2nd node
+    panos_restart:
+      ip_address: '{{panos_2nd_fw}}'
+      username: '{{panos_admin_user}}'
+      password: '{{panos_admin_pass}}'
+    delegate_to: localhost
+    
+  - name: Get the OS version from the API
+    get_url:
+      url: 'https://{{ panos_2nd_fw }}/api/?type=version&key={{ panos_api_key }}'
+      dest: ./panos_version2.xml
+    retries: 30
+    delay: 5
+    register: result
+    until: result.status == 200
+    changed_when: false 	
+
+  - name: Check OS Version
+    xml:
+      file: ./panos_version2.xml
+      xpath: /response/result/sw-version
+      content: text
+    register: xmlresp
+    delegate_to: localhost
+
+  - assert:
+      that:
+        - "xmlresp['matches'][0]['sw-version'] == 8.1.2"
+      msg: 'The upgrade was not sucessfull on the 2nd node. Restart the upgrade process...'
